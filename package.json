@@ -1,12 +1,16 @@
 {
   "name": "@gabrielheinrich/queryscript",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "",
   "private": false,
   "main": "./dist/main.js",
+  "types": "./dist/main.d.ts",
+  "files": [
+    "./dist"
+  ],
   "scripts": {
     "dev": "ts-node ./src/main.ts",
-    "build": "tsc",
+    "build": "rm -rf ./dist && tsc",
     "test": "jest"
   },
   "author": "",
