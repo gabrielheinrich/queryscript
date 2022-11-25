@@ -66,7 +66,9 @@ function sql(...statements: any[]): any {
   };
 }
 
-export const createDatabase = <S extends BaseSchema>(
+export { sql };
+
+const createDatabase = <S extends BaseSchema>(
   schema: S,
   $sql: string
 ): Db<S> => {
@@ -134,7 +136,7 @@ export function createTable<N, C extends BaseColumns, S extends BaseSchema>(
   return (db: Db<S>) => db.createTable(name, table);
 }
 
-function column<ColumnName>(name: StringLiteral<ColumnName>, desc: any) {
+export function column<ColumnName>(name: StringLiteral<ColumnName>, desc: any) {
   return <C extends BaseColumns, TableName, S extends BaseSchema>(
     table: Table<C, TableName>,
     db: Db<S>
@@ -143,33 +145,8 @@ function column<ColumnName>(name: StringLiteral<ColumnName>, desc: any) {
   };
 }
 
-const compile = <S2 extends BaseSchema>(migration: (s: Db<{}>) => Db<S2>) => {
+export const compile = <S2 extends BaseSchema>(
+  migration: (s: Db<{}>) => Db<S2>
+) => {
   return migration(createDatabase({}, ""));
 };
-
-export const migration = sql(
-  (db) =>
-    db
-      .createTable("posts", (tbl) => tbl.column("id", String))
-      .createTable("users", (tbl) => tbl.column("id", String)),
-  // Create a new binding for db that has access to db.users
-  (db) =>
-    db
-      .createTable("accounts", (tbl) => {
-        // Alternative approach to get updated typings
-        const tbl1 = tbl.column("id", String).column("userId", db.users.id);
-        // tbl1 has members .id and .userId while tbl is empty
-        return tbl1.unique(tbl1.id).unique(tbl1.userId);
-      })
-      .dropTable("posts")
-);
-
-export const migration2 = sql(
-  createTable("posts", column("id", String)),
-  createTable("users", column("id", String)),
-  createTable("accounts", column("userId", column("id", String)))
-);
-
-const output = compile(sql(migration));
-
-console.log(output.$sql);
