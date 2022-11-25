@@ -32,6 +32,7 @@ type Column<N> = {
 type Table<C extends BaseColumns, TableName> = C & {
   $name: StringLiteral<TableName>;
   $sqltype: "table";
+  $body: string[];
   column: <N>(
     name: StringLiteral<N>,
     desc: any
@@ -65,48 +66,62 @@ function sql(...statements: any[]): any {
   };
 }
 
-export const createDatabase = <S extends BaseSchema>(schema: S): Db<S> => {
+export const createDatabase = <S extends BaseSchema>(
+  schema: S,
+  $sql: string
+): Db<S> => {
   function createTable<N, C extends BaseColumns>(
     name: StringLiteral<N>,
     table: (table: Table<{}, N>, db: Db<S>) => Table<C, N>
   ): Db<WithEntry<S, N, Table<C, N>>> {
-    const defineTable = <C extends BaseColumns>(columns: C): Table<C, N> => {
+    const defineTable = <C extends BaseColumns>(
+      columns: C,
+      $body: string[]
+    ): Table<C, N> => {
       function column<ColumnName>(
         name: StringLiteral<ColumnName>,
         desc: any
       ): Table<WithEntry<C, ColumnName, Column<ColumnName>>, N> {
-        return defineTable({
-          ...columns,
-          ...makeObject(name, { desc, $name: name, $sqltype: "column" }),
-        });
+        return defineTable(
+          {
+            ...columns,
+            ...makeObject(name, { desc, $name: name, $sqltype: "column" }),
+          },
+          [...$body, `${name} string`]
+        );
       }
 
       function unique<ColumnName>(column: Column<ColumnName>): Table<C, N> {
-        return defineTable(columns);
+        return defineTable(columns, [...$body, `unique ${column.$name}`]);
       }
 
       return {
         ...columns,
         $name: name,
+        $body,
         $sqltype: "table",
         column,
         unique,
       };
     };
-    return createDatabase({
-      ...schema,
-      ...makeObject(name, table(defineTable({}), createDatabase(schema))),
-    });
+    const tbl = table(defineTable({}, []), createDatabase(schema, $sql));
+    return createDatabase(
+      {
+        ...schema,
+        ...makeObject(name, tbl),
+      },
+      $sql + `create table ${name} (\n\t${tbl.$body.join(",\n\t")}\n);\n`
+    );
   }
 
   function dropTable<N>(name: StringLiteral<N>): Db<Omit<S, StringLiteral<N>>> {
     const { [name]: _, ...newSchema } = schema;
-    return createDatabase(newSchema);
+    return createDatabase(newSchema, $sql + `drop table ${name};`);
   }
 
   return {
     ...schema,
-    $sql: "",
+    $sql,
     createTable,
     dropTable,
   };
@@ -129,7 +144,7 @@ function column<ColumnName>(name: StringLiteral<ColumnName>, desc: any) {
 }
 
 const compile = <S2 extends BaseSchema>(migration: (s: Db<{}>) => Db<S2>) => {
-  return migration(createDatabase({}));
+  return migration(createDatabase({}, ""));
 };
 
 export const migration = sql(
@@ -155,6 +170,6 @@ export const migration2 = sql(
   createTable("accounts", column("userId", column("id", String)))
 );
 
-const output = compile(sql(migration2));
+const output = compile(sql(migration));
 
 console.log(output.$sql);
